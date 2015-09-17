@@ -6,7 +6,7 @@ import json
 from functools import reduce
 
 
-def format_path(parsed, data = {}):
+def format_path(parsed, data={}):
     """
     From a urlparse result, extract the path and query component, optionally
     adding some data from a dictionary
@@ -25,12 +25,15 @@ def format_path(parsed, data = {}):
     if parsed.query:
         params.append(parsed.query)
     if data:
-        params.append(urllib.urlencode(data))
+        params.append(urlencode(data))
     if params:
         url += '?' + '&'.join(params)
     return url
 
+
 encoding_re = re.compile("charset\s*=\s*(\S+?)(;|$)")
+
+
 def encoding_from_content_type(content_type):
     """
     Extracts the charset from a Content-Type header.
@@ -46,7 +49,10 @@ def encoding_from_content_type(content_type):
     match = encoding_re.search(content_type)
     return match and match.group(1) or None
 
+
 link_re = re.compile('\s*<([^>]+)>;\s*rel\s*="([^"]+)"')
+
+
 def parse_link_header(header):
     """
     RFC 5988 parsing
@@ -76,7 +82,9 @@ def absolute_url(relative, base):
     else:
         path = relative.path
 
-    return ParseResult(scheme=scheme, netloc=netloc, path=path, params=relative.params, query=relative.query, fragment=relative.fragment).geturl()
+    return ParseResult(scheme=scheme, netloc=netloc, path=path, params=relative.params,
+                       query=relative.query, fragment=relative.fragment).geturl()
+
 
 class Service(object):
     """
@@ -91,15 +99,14 @@ class Service(object):
     True
     """
 
-    def __init__(self, url, filter = None, namespaces = {}, persistent_headers = {}):
+    def __init__(self, url, filter=None, namespaces={}, persistent_headers={}):
         self.filter = filter
         self.namespaces = namespaces
         self.persistent_headers = persistent_headers
         self.url = url
 
-    def get(self, params = {}, headers = {}):
+    def get(self, params={}, headers={}):
         location = urlparse(self.url)
-
 
         if location.scheme == 'http':
             connection = HTTPConnection(location.netloc)
@@ -107,13 +114,17 @@ class Service(object):
             connection = HTTPSConnection(location.netloc)
         else:
             raise NotImplementedError('Only HTTP and HTTPS are supported')
-        headers = dict(headers.items() + self.persistent_headers.items())
-        connection.request('GET', format_path(location, params), headers = headers)
+
+        headers_to_send = self.persistent_headers.copy()
+        headers_to_send.update(headers)
+
+        connection.request('GET', format_path(location, params), headers=headers_to_send)
         resp = connection.getresponse()
         return Representation.factory(resp, self)
 
     def find(self, xpath):
-      return Service(self.url, filter=xpath, persistent_headers=self.persistent_headers, namespaces=self.namespaces)
+        return Service(self.url, filter=xpath, persistent_headers=self.persistent_headers,
+                       namespaces=self.namespaces)
 
     def follow_link(self, link):
         """
@@ -121,7 +132,8 @@ class Service(object):
         """
         response = self.get()
         link = response.find_link(link, self.filter)
-        return Service(absolute_url(link, self.url), namespaces = self.namespaces, persistent_headers = self.persistent_headers)
+        return Service(absolute_url(link, self.url), namespaces=self.namespaces,
+                       persistent_headers=self.persistent_headers)
 
     __getattr__ = follow_link
 
@@ -137,7 +149,8 @@ class Representation(object):
 
     @staticmethod
     def factory(response, service):
-        if Representation.mime_type(response) in ['application/xml', 'application/atom+xml', 'text/xml']:
+        mime_type = Representation.mime_type(response)
+        if mime_type in ['application/xml', 'application/atom+xml', 'text/xml']:
             return XMLRepresentation(response, service.namespaces)
         else:
             return Representation(response)
@@ -156,20 +169,20 @@ class Representation(object):
     def read(self, count=None):
         data = self.response.read(count)
         if self.encoding:
-            return unicode(data, self.encoding)
+            return data.decode(self.encoding)
         else:
             return data
 
 
 class XMLRepresentation(Representation):
 
-    def __init__(self, response, namespaces = {}):
+    def __init__(self, response, namespaces={}):
         super(XMLRepresentation, self).__init__(response)
         self.parsed = etree.parse(self)
         self.namespaces = namespaces
 
     def xpath(self, path):
-        return self.parsed.xpath(path, namespaces = self.namespaces)
+        return self.parsed.xpath(path, namespaces=self.namespaces)
 
     def find_link(self, link, filter=None):
         try:
