@@ -152,6 +152,8 @@ class Representation(object):
         mime_type = Representation.mime_type(response)
         if mime_type in ['application/xml', 'application/atom+xml', 'text/xml']:
             return XMLRepresentation(response, service.namespaces)
+        elif mime_type in ['application/json', 'text/json']:
+            return JSONRepresentation(response, service.namespaces)
         else:
             return Representation(response)
 
@@ -198,3 +200,41 @@ class XMLRepresentation(Representation):
                 # what's the right way to handle namespaces here?
                 result.extend(node.xpath('//*[local-name()="link" and @rel="%s"]/@href' % link))
             return result[0]
+
+
+class JSONRepresentation(Representation):
+
+    def __init__(self, response, namespaces={}):
+        super().__init__(response)
+        self.parsed = json.loads(self.read())
+
+    def find_link(self, link, filter=None):
+        try:
+            super(JSONRepresentation, self).find_link(link)
+        except KeyError:
+            if filter:
+                data = self.find(filter)
+            else:
+                data = self.parsed
+
+            for elem in data['_links']:
+                if elem['rel'] == link:
+                    return elem['href']
+            raise KeyError
+
+    def find(self, path):
+        def find_key(acc, key):
+            if key[0] == '[' and key[-1] == ']' and '=' in key:
+                attr, _, val = key[1:-1].partition('=')
+                for elem in acc:
+                    if str(elem[attr]) == str(val):
+                        return elem
+            if key.isdigit():
+                try:
+                    acc = acc[int(key)]
+                    return elem
+                except IndexError:
+                    pass
+            return acc[key]
+
+        return reduce(find_key, path.split('.'), self.parsed)
