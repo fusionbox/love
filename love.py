@@ -1,8 +1,9 @@
-from urlparse import urlparse, ParseResult
-from httplib import HTTPConnection, HTTPSConnection
-import urllib
+from urllib.parse import urlparse, ParseResult, urlencode
+from http.client import HTTPConnection, HTTPSConnection
 import re
 from lxml import etree
+import json
+from functools import reduce
 
 
 def format_path(parsed, data = {}):
